@@ -1,25 +1,33 @@
 import java.util.Scanner;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.lang.Math;
 
 public class Polinomial {
     private static Scanner in = new Scanner(System.in);
-    private static final double EPSILON = 1e-6;
+    private static final double MINIMO = Double.POSITIVE_INFINITY;
+    private static final double MAXIMO = Double.NEGATIVE_INFINITY;
+    private static final double LIMITE = 1e-6;
 
     public static void main(String[] args) {
+        double root;
         System.out.println("--------------- [ CALCULADOR DE POLINOMIOS ] ---------------");
 
         int grau = readGrau();
         ArrayList<Double> coeficientes = readCoeficientes(grau);
 
-        double quotasKojima[] = metodoKojima(coeficientes, grau);
+        double quotasKojima = metodoKojima(coeficientes, grau);
         double quotaCauchy = metodoCauchy(coeficientes, grau);
         double quotasMaximo[] = metodoMaximoMinimo(coeficientes, grau);
-        //double bestQuotas[] = computeQuotas(quotasKojima, quotasCauchy, quotasMaximo);
+        double bestQuotas[] = computeQuotas(quotasKojima, quotaCauchy, quotasMaximo);
 
-        //double root = computeRoot(bestQuotas);
+        if (verificaRaiz(coeficientes, bestQuotas, grau) == true) {
+            root = metodoSecante(coeficientes, bestQuotas, grau);
+        } else {
+            root = metodoFalsaPosicao(coeficientes, bestQuotas, grau);
+        }
 
-        //printaResultados(grau, coeficientes, bestQuotas, root);
+        printaResultados(grau, coeficientes, bestQuotas, root);
     }
 
     private static int readGrau() {
@@ -48,16 +56,19 @@ public class Polinomial {
         return coeficientes;
     }
 
-    private static double[] metodoKojima(ArrayList<Double> coeficientes, int grau) {
+    private static double metodoKojima(ArrayList<Double> coeficientes, int grau) {
         double quotasKojima[] = new double[grau];
-
-        for(int i=1; i<=grau; i++) {
-            quotasKojima[i-1] = Math.pow(Math.abs(coeficientes.get(i) / coeficientes.get(0)), (1/ (double) i));
+        double soma;
+    
+        for(int i = 1; i <= grau; i++) {
+            quotasKojima[i - 1] = Math.pow(Math.abs(coeficientes.get(i) / coeficientes.get(0)), (1.0 / (double) i));
         }
-
-        System.out.print("\nCota de Kojima: ");
-        printaQuotas(grau, quotasKojima);
-        return quotasKojima;
+    
+        Arrays.sort(quotasKojima);
+        soma = quotasKojima[quotasKojima.length - 1] + quotasKojima[quotasKojima.length - 2];
+    
+        //System.out.printf("\nCota de Kojima: %.2f" ,soma);
+        return soma;
     }
 
     private static double metodoCauchy(ArrayList<Double> coeficientes, int grau) {
@@ -82,15 +93,15 @@ public class Polinomial {
             soma = aux;
 
             dif = soma - dif;
-        } while (dif >= 1e-6);
+        } while (dif >= LIMITE);
 
-        System.out.printf("\nCota de Cauchy: %.2f\n", soma);
+        //System.out.printf("\nCota de Cauchy: %.2f\n", soma);
         return soma;
     }
 
     private static double[] metodoMaximoMinimo(ArrayList<Double> coeficientes, int grau) {
         double valores[] = new double[2];
-        double maximo =  Double.NEGATIVE_INFINITY;
+        double maximo =  MAXIMO;
         
         for (int i=1; i<=grau; i++) {
             double valor = Math.abs(coeficientes.get(i));
@@ -108,28 +119,118 @@ public class Polinomial {
 
         valores[1] = 1 / (1 + (maximo / Math.abs(coeficientes.get(grau))));
 
-        System.out.printf("Máximo: %.2f\nMínimo: %.2f\n", valores[0], valores[1]);
+        //System.out.printf("Cota Máxima: %.2f\nCota Mínima: %.2f\n", valores[0], valores[1]);
         return valores;
     }
 
-    private static double[] computeQuotas(double[] quotasKojima, double[] quotasCauchy, double[] quotasMaximo) {
+    private static double[] computeQuotas(double quotasKojima, double quotasCauchy, double[] quotasMaximo) {
         double bestQuotas[] = new double[2];
+        ArrayList<Double> cotas = new ArrayList<>();
 
+        cotas.add(quotasCauchy);
+        cotas.add(quotasKojima);
+        adicionaQuotas(cotas, quotasMaximo);
+
+        bestQuotas[0] = menorQuota(cotas);
+
+        cotas.removeAll(Arrays.asList(menorQuota(cotas)));
+
+        bestQuotas[1] = menorQuota(cotas);
+
+        //System.out.printf("\nMelhores cotas: [%.2f | %.2f]", bestQuotas[0], bestQuotas[1]);
         return bestQuotas;
     }
 
-    private static double metodoSecante(ArrayList<Double> coeficientes) {
-        return 0;
+    private static void adicionaQuotas(ArrayList<Double> cotas, double[] quotas) {
+        for (double c : quotas) 
+            cotas.add(c);
     }
 
-    private static double metodoFalsaPosicao(ArrayList<Double> coeficientes) {
-        return 0;
+    private static double menorQuota(ArrayList<Double> cotas) {
+        double menor = MINIMO;
+
+        for (double c : cotas) 
+            if (c < menor) menor = c;
+        return menor;
     }
 
-    private static double computeRoot(double bestQuotas[]) {
-        double root = 0;
+    private static double metodoSecante(ArrayList<Double> coeficientes, double[] bestQuotas, int grau) {
+        double res=0, dif=0;
+        int count=0;
+        double x0 = (bestQuotas[0] + bestQuotas[1]) / 2;
+        double x1 = bestQuotas[0] + 0.01;
+        double fx0 = fX(coeficientes, x0, grau);
+        double fx1 = fX(coeficientes, x1, grau);
 
-        return root;
+        do {
+            dif = res;
+
+            fx0 = fX(coeficientes, x0, grau);
+            fx1 = fX(coeficientes, x1, grau);
+
+            res = x1 - ((fx1 * (x1 - x0)) / (fx1 - fx0));
+
+            x0 = x1;
+            x1 = res;
+
+            dif = res - dif;
+
+            count++;
+            if(count == 5000) break;
+        } while (dif >= LIMITE);
+
+        //System.out.printf("\n\nMétodo Secante: %.2f" ,res);
+        return res;
+    }
+
+    private static double metodoFalsaPosicao(ArrayList<Double> coeficientes, double[] bestQuotas, int grau) {
+        double res=0, dif=0;
+        double x0 = bestQuotas[0];
+        double x1 = bestQuotas[1];
+        double fx0 = fX(coeficientes, x0, grau);
+        double fx1 = fX(coeficientes, x1, grau);
+
+        do {
+            dif = res;
+
+            fx0 = fX(coeficientes, x0, grau);
+            fx1 = fX(coeficientes, x1, grau);
+
+            res = ((x0 * fx1) - (x1 * fx0)) / (fx1 - fx0);
+
+            x0 = x1;
+            x1 = res;
+
+            dif = res - dif;
+        } while (dif >= LIMITE);
+
+        //System.out.printf("\nMétodo Falsa-Posição: %.2f" ,res);
+        return res;
+    }
+
+    private static double fX(ArrayList<Double> coeficientes, double valor, int grau) {
+        double resultado = 0;
+        int index = grau;
+
+        for (double coef : coeficientes) {
+            resultado += coef * Math.pow(valor, index);
+            index--;
+        }
+
+        return resultado;
+    }
+
+    private static boolean verificaRaiz(ArrayList<Double> coeficientes, double[] bestQuotas, int grau) {
+        double x0 = bestQuotas[0];
+        double x1 = bestQuotas[1];
+        double fx0 = fX(coeficientes, x0, grau);
+        double fx1 = fX(coeficientes, x1, grau);
+
+        if(fx0 * fx1 <= 0) {
+            return false;
+        } else {
+            return true;
+        }
     }
 
     private static void printaResultados(int grau, ArrayList<Double> coeficientes, double bestQuotas[], double root) {
@@ -140,10 +241,9 @@ public class Polinomial {
         System.out.print("Equação do polinomio: ");
         printaEquacao(grau, coeficientes);
 
-        System.out.print("\nMelhores quotas: ");
-        printaQuotas(grau, bestQuotas);
+        System.out.printf("\nMelhores quotas: [%.2f | %.2f]", bestQuotas[0], bestQuotas[1]);
 
-        System.out.println("\nRaiz: " +root);
+        System.out.printf("\nRaiz: %.2f" ,root);
     }
 
     private static void printaEquacao(int grau, ArrayList<Double> coeficientes) {
@@ -168,13 +268,6 @@ public class Polinomial {
                     }
                 }
             }
-        }
-    }
-
-    private static void printaQuotas(int grau, double quotas[]) {
-        for (int i=0; i<grau; i++) {
-            if (quotas[i] == 0) continue;
-            System.out.printf("[ %.2f ] ", quotas[i]);
         }
     }
 }
